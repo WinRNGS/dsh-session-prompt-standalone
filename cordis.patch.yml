@@ -1,0 +1,7 @@
+# dsh-session-prompt bundle 层：注册插件，并设置要注入的 system prompt。
+# 修改 prompt 后重启 DSH（或热重载插件）即可生效。
+- insert:
+    - id: dsh-session-prompt
+      name: '@dsh-external/dsh-session-prompt'
+      config:
+        prompt: 'You are a helpful software engineer assistant.'
