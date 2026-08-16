@@ -106,7 +106,9 @@ export function apply(ctx: Context, config: Config = {}): void {
       // 已有用户消息 = 恢复/续聊，跳过；只处理全新会话。
       if (session.events.some((e: any) => e.type === 'user/message')) return
       // 只注入顶层用户会话，不打扰子代理/subagent。
-      if (session.header?.delegationDepth !== 0) return
+      // 注意：delegationDepth 在 session-start 时可能尚未稳定为 0，
+      // 所以只用“明确大于 0”来判断子代理，避免误杀顶层会话。
+      if (session.header?.delegationDepth) return
 
       agent.inject({
         id: `dsh-session-prompt-${session.id}-${Date.now()}`,
