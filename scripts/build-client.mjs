@@ -11,8 +11,8 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const candidates = [
   process.env.DSH_CHECKOUT,
   join(homedir(), 'dsh-harness'),
-  'D:/deepseek harness',
-  'D:/deepseek harness - 副本',
+  join(homedir(), 'dsh'),
+  join(homedir(), 'deepseek-harness'),
 ].filter(Boolean)
 
 const checkout = candidates.find((dir) => existsSync(join(dir, 'packages')))

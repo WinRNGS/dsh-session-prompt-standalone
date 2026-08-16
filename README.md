@@ -1,101 +1,72 @@
 # @dsh-external/dsh-session-prompt
 
-在每个 DSH **新会话开始前**，自动往聊天记录里插入一条可自定义的 AI/系统回复，作为上下文前置提示词；并在**输入框工具区**（模型选择左侧）提供一个编辑按钮。
+DSH 插件：在每个新会话中自动注入你的自定义指令。
 
-- 它不修改 DSH 默认 `deployment:persona`，保留官方默认 agent prompt。
-- 默认文本：`You are a helpful software engineer assistant.`
-- 新会话创建时，聊天里会先出现一条 assistant 消息，内容为该提示词，之后才是用户输入。
+- **持久层**：以静态 system prompt 段存在，上下文压缩后依然有效，且不覆盖官方默认 persona。
+- **可见层**：新会话聊天里会出现一条 `dsh-session-prompt` 来源的上下文消息，用户能直接看到。
+- **输入框 UI**：在模型选择左侧提供 **System Prompt** 按钮，可随时查看/修改注入内容。
 
-## UI 入口
+## 克隆
 
-桌面端/Web 端打开任意会话后，在输入框右侧、模型选择左边会看到一个 **System Prompt** 按钮：
-
-- 点击后弹出编辑框；
-- 可以查看当前注入内容；
-- 修改后保存，对之后新建的会话生效；
-- 内容持久化到 `~/.dsh/dsh-session-prompt.json`。
-
-## 自定义提示词
-
-### 方式一：输入框 UI（推荐）
-
-点击输入框左下角的 **System Prompt** 按钮，直接编辑并保存。
-
-### 方式二：运行时工具
-
-对 DSH 说：
-
-```text
-把 system prompt 设置为：You are a helpful software engineer assistant.
+```bash
+git clone https://github.com/WinRNGS/dsh-session-prompt-standalone.git
+cd dsh-session-prompt-standalone
 ```
-
-插件会调用 `dsh_session_prompt_set`，更新当前运行中的 system prompt，并持久化到：
-
-```text
-~/.dsh/dsh-session-prompt.json
-```
-
-### 方式三：通过插件配置
-
-修改 DSH profile 的 `cordis.patch.yml`（例如 `~/.dsh/profiles/web/cordis.patch.yml`），加入或覆盖：
-
-```yaml
-- insert:
-    - id: dsh-session-prompt
-      name: '@dsh-external/dsh-session-prompt'
-      config:
-        prompt: 'You are a helpful software engineer assistant.'
-```
-
-如果你通过 bundle 方式装配，也可以直接修改本插件的 `cordis.patch.yml`。
-
-> 提示：`prompt` 是纯静态文本，保持固定可以最大化前缀缓存命中。修改后需要重启 DSH 或热重载插件。
 
 ## 安装
 
 ### 运行时注入（开发态）
 
-本插件已按注入器规范编写，资源全部挂 `ctx.effect`，可直接：
+在已装配 `dsh-super-injector` 的 DSH 环境中，对本仓库目录执行：
 
-```bash
-dev_inject_plugin D:/DeepSeek harness Test/dsh-session-prompt
+```text
+dev_inject_plugin <本仓库的绝对路径>
+```
+
+例如克隆到 `C:/Users/You/dsh-session-prompt-standalone`：
+
+```text
+dev_inject_plugin C:/Users/You/dsh-session-prompt-standalone
 ```
 
 ### 官方装配（重启持久）
 
 ```bash
-dsh plugin --profile web add D:/DeepSeek harness Test/dsh-session-prompt
-# 或使用生成的 tgz
-dsh plugin --profile web add D:/DeepSeek harness Test/dsh-session-prompt/dsh-external-dsh-session-prompt-0.1.0.tgz
+# 使用仓库目录
+dsh plugin --profile web add <本仓库的绝对路径>
+
+# 或使用仓库内的 tgz
+dsh plugin --profile web add <本仓库的绝对路径>/dsh-external-dsh-session-prompt-0.1.0.tgz
 ```
 
 ## 构建
 
+需要先有 DSH 源码 checkout：
+
 ```bash
-# 设置 DSH 源码 checkout 后执行
-DSH_CHECKOUT="D:/deepseek harness" bash scripts/build.sh
+# 把 <DSH_CHECKOUT> 换成你自己的 DSH 源码目录
+DSH_CHECKOUT=<DSH_CHECKOUT> bash scripts/build.sh
+
 # 构建客户端 UI
 npm run build:client
 ```
 
-或在已装配 dsh-super-injector 的环境中直接说：
+在已装配 dsh-super-injector 的环境中，也可以直接说：
 
 ```text
-dev_build_plugin D:/DeepSeek harness Test/dsh-session-prompt
+dev_build_plugin <本仓库的绝对路径>
 ```
+
+## 自定义指令
+
+- 点击输入框左侧 **System Prompt** 按钮直接编辑；
+- 或对 DSH 说：`把 system prompt 设置为：...`；
+- 内容持久化到 `~/.dsh/dsh-session-prompt.json`。
 
 ## 验证
 
-新开会话后，模型实际收到的 system prompt 开头会类似：
+新会话中：
 
-```text
-You are an AI agent powered by DeepSeek Harness.
-
-...
-
-You are a helpful software engineer assistant.
-
-...
-```
-
-输入框左下角应出现 **System Prompt** 按钮。
+1. 聊天里会出现一条 `dsh-session-prompt` 来源的上下文消息；
+2. system prompt 中包含 `session-prompt:persistent` 段；
+3. 官方默认 `deployment:persona` 保持不变。
