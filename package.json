@@ -1,7 +1,7 @@
 {
   "name": "@dsh-external/dsh-session-prompt",
-  "version": "0.1.0",
-  "description": "在每个 DSH 新会话的 system prompt 开头自动注入可自定义的固定提示词，并提供输入栏 UI 编辑入口",
+  "version": "0.2.0",
+  "description": "以 system prompt 固定段（session-prompt:persistent）向每个 DSH 会话注入可自定义指令，并提供输入栏 UI 编辑入口",
   "private": false,
   "type": "module",
   "main": "./lib/index.js",
@@ -12,7 +12,6 @@
       "default": "./lib/index.js"
     },
     "./client": {
-      "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
     },
     "./package.json": "./package.json"
@@ -23,7 +22,16 @@
     "scripts/build.sh",
     "scripts/build-client.mjs",
     "tsdown.config.ts",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "system-prompt",
+    "custom-instructions"
   ],
   "license": "MIT",
   "dsh": {
@@ -32,8 +40,7 @@
     },
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-client-ui-conversation"
       ],
       "platform": "web"

@@ -54,7 +54,10 @@ function SystemPromptButton() {
     setLoading(true)
     setMsg(null)
     fetch(API)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
       .then((data) => {
         if (cancelled) return
         if (data?.ok) {
@@ -115,6 +118,7 @@ function SystemPromptButton() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ prompt: next }),
       })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = await response.json()
       if (!data?.ok) throw new Error(data?.error || '保存失败')
       setMsg({ text: '已保存，新会话立即生效 ✓' })
