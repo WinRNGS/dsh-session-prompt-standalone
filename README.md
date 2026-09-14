@@ -64,6 +64,20 @@ You are a coding agent powered by <model>.
 
 ---
 
+## 版本与分支
+
+本仓库是 `dsh-session-prompt` 的发布仓库：
+
+| 分支 | 内容 |
+|---|---|
+| **`main`** | **最新版（当前 V0.2，system prompt 单通道）** |
+| `v0.2` | V0.2 的干净单提交历史（要与上游对比时用它） |
+| `v0.1` | 旧版 V0.1（system prompt 段 + 上下文消息双通道），仅作保留 |
+
+安装请用 `main`（默认分支）或固定到 `v0.2`；历史版本的打包产物见 Releases。
+
+---
+
 ## 环境要求
 
 - DSH（DeepSeek Harness）本体，`@deepseek-ai/dsh-system-prompt` / `@deepseek-ai/dsh-tools`
@@ -78,8 +92,11 @@ You are a coding agent powered by <model>.
 ### 方式 A：从本仓库目录直接装（最简单）
 
 ```bash
-git clone <本仓库地址> dsh-session-prompt
+git clone https://github.com/WinRNGS/dsh-session-prompt-standalone.git dsh-session-prompt
 dsh plugin --profile web add "$(pwd)/dsh-session-prompt"
+
+# 想固定在某条版本分支上：
+# git clone -b v0.2 https://github.com/WinRNGS/dsh-session-prompt-standalone.git dsh-session-prompt
 ```
 
 `dsh plugin --profile <name> add <spec>` 是 pnpm 的转发器；装完会自动把声明了
@@ -97,7 +114,7 @@ dsh plugin --profile web add ./dsh-external-dsh-session-prompt-0.2.0.tgz
 // ~/.dsh/profiles/<profile>/package.json
 {
   "dependencies": {
-    "@dsh-external/dsh-session-prompt": "github:<你的账号>/<本仓库>#main"
+    "@dsh-external/dsh-session-prompt": "github:WinRNGS/dsh-session-prompt-standalone#v0.2"
   }
 }
 ```
