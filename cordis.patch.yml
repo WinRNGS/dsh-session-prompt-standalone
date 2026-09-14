@@ -1,0 +1,10 @@
+# dsh-session-prompt bundle 层：把插件注册进 cordis loader。
+#
+# 这里不写 config.prompt —— 插件自带一份通用默认提示词，开箱即用。
+# 如需在装配层固定初始值，取消下面两行注释并改成你的文本（优先级低于
+# ~/.dsh/dsh-session-prompt.json）：
+#   config:
+#     prompt: '你的初始提示词'
+- insert:
+    - id: dsh-session-prompt
+      name: '@dsh-external/dsh-session-prompt'
