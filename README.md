@@ -1,251 +1,171 @@
 # @dsh-external/dsh-session-prompt
 
-> DSH 插件：把你自定义的一段指令，**作为 system prompt 固定段**注入每一个会话。
+为 DeepSeek Harness 提供持久提示词注入。插件保留 DSH 原有的 Harness Identity、Agent Preset 和工具说明，并在其基础上增加可管理的全局层与工作区层。
 
-它注册一段静态 system prompt（段名 `session-prompt:persistent`，顺序 10，紧跟官方
-`deployment:persona` 之后），因此：
+仓库已经包含编译后的 `lib/`，普通用户和安装 Agent 不需要准备开发环境，也不需要先执行构建。
 
-- ✅ **不会被上下文压缩丢掉**：每次模型请求都重新组装，长会话、压缩、恢复后依然有效；
-- ✅ **不覆盖官方 persona**：它是独立的一段，与官方人格提示词并存；
-- ✅ **不污染聊天记录**：不会在会话里插入假的 user 消息，也不会把同一段文本发两遍；
-- ✅ **全局即时生效**：改完提示词，所有会话（含进行中的）下一轮请求就用新内容；
-- ✅ **可随时可视化修改**：输入栏有一个 **System Prompt** 按钮，点开即可编辑保存；
-- ✅ **也支持让模型自己改**：内置工具 `dsh_session_prompt_set`，直接对它说"把 system prompt 设置为：…"。
+## 功能
 
-内容持久化在 `~/.dsh/dsh-session-prompt.json`，插件只在本地读写，不联网。
+- 全局默认提示词与当前工作区提示词可以同时启用；
+- 每层可选择 `System` 或 `User Context` 身份；
+- 每层可独立设置启用状态和排序值；
+- 设置长期保存在 DSH 数据目录中，重启和上下文压缩后仍会重新装配；
+- 设置界面可预览当前会话的段落顺序、来源与最终文本；
+- 模型发起的修改必须经过 DSH 原生审批，不能静默改写设置；
+- 支持多 profile 并发保护、revision 冲突检测和外部文件热重载；
+- 提供版本化设置迁移、异常数据保护和恢复默认。
 
----
+## 快速安装
 
-## 效果示例
+### 方式一：直接从 Git 仓库安装
 
-设置一段"工程 Agent 工作守则"后，每个会话的 system prompt 会变成：
+这是用户和安装 Agent 的推荐方式：
 
-```
-You are an AI agent powered by DeepSeek Harness.      ← 官方 persona（未改动）
-You are a coding agent powered by <model>.
-# AI 工程 Agent 工作守则                              ← 本插件注入的段
-## 优先级
-执行任务时遵循：
-...
+```bash
+dsh plugin --profile web add "github:WinRNGS/dsh-session-prompt-standalone#main"
 ```
 
-插件自带一份通用的「AI 工程 Agent 工作守则」作为默认提示词（见 `src/index.ts` 的
-`DEFAULT_PROMPT`），装上就能用，也可以整段替换成你自己的。
+如果实际运行的是其他 profile，把 `web` 换成对应名称。安装完成后重启该 DSH profile。
 
----
+### 方式二：下载后本地安装
 
-## 工作原理
+```bash
+gh repo clone WinRNGS/dsh-session-prompt-standalone
+cd dsh-session-prompt-standalone
+dsh plugin --profile web add .
+```
 
-| 通道 | 落地位置 | 说明 |
+Windows 上建议把仓库放在不含空格的目录中，以避开部分旧版 DSH CLI 转发本地路径时的参数解析问题。
+
+### 方式三：安装打包文件
+
+在仓库目录执行：
+
+```bash
+npm pack
+dsh plugin --profile web add ./dsh-external-dsh-session-prompt-0.4.0.tgz
+```
+
+安装 Agent 可以直接执行方式一；若环境禁止 Git 依赖，则下载仓库后执行方式二。无需修改 DSH 源码或手工复制 `lib/`。
+
+## 使用
+
+在会话输入栏右侧点击 **Prompt 注入**：
+
+1. 选择“全局默认”或“当前工作区”；
+2. 选择 `System` 或 `User Context`；
+3. 设置排序值、启用状态和正文；
+4. 保存，下一次模型请求生效；
+5. 展开装配预览，检查顺序、来源与最终文本。
+
+“恢复默认”会恢复插件配置中的初始全局值；“移除覆盖”只删除当前工作区层。
+
+模型可以调用 `dsh_session_prompt_set` 提议修改全局正文，但真正写入前必须经过 DSH 原生审批界面的人工确认。工具结果不会重复回显完整提示词。
+
+## 注入身份
+
+| 身份 | DSH 原生机制 | 行为 |
 |---|---|---|
-| **静态 system prompt 段** | `ctx.systemPrompt.section({ name: 'session-prompt:persistent', order: 10, text })` | 唯一注入通道。每轮请求重新组装；`order: 10` 位于 persona（0）之后、工具引导（100+）之前 |
-| **编辑入口** | 输入栏 `conversation.input.right`（模型选择器左侧）→ 同源 API `/dsh-session-prompt/api` | 打开模态框读取当前文本；保存即写文件 + 热替换段 |
-| **工具入口** | `dsh_session_prompt_set` | 让模型/脚本直接改写 |
-| **持久化** | `~/.dsh/dsh-session-prompt.json` | `{ "prompt": "…" }`，UTF-8 |
+| `System` | `systemPrompt.section()` | 每次模型请求时重新装配进真正的 system prompt；恢复会话或压缩上下文后仍然存在。 |
+| `User Context` | `systemPrompt.context()` | 生成带来源信息的 user-role runtime-context 快照；只在内容变化时投影新快照，不会每轮机械重复追加。 |
 
-优先级：`~/.dsh/dsh-session-prompt.json` > `cordis.patch.yml` 的 `config.prompt` > 内置默认值。
-（三处都为空时回落内置默认值，不会因为空值导致装配失败。）
+`User Context` 是 DSH 当前最接近“聊天中注入”的原生通道，但不是任意历史深度插入。插件不伪造 `Assistant` 消息，也不提供“倒数第 N 条消息”注入，以免破坏会话恢复、工具调用与消息配对。
 
-### 为什么只有一个通道（v0.2.0 的设计决定）
+## 层级与排序
 
-0.1.0 曾是"双通道"：除了 system prompt 段，还在 `agent/session-start` 时用
-`agent.inject()` 往会话里塞一条 `role: 'user'` 的上下文消息（让用户"在聊天里看到"）。
-该做法有四个硬伤，已在 0.2.0 移除：
+全局层和工作区层可以同时生效。工作区层使用当前会话工作目录的规范化路径作为内部键，浏览器不能自行指定其他工作区路径。
 
-1. **静默失灵**：它依赖 `session.events`，而 DSH `0.1.5-rc.1` 移除了这个 getter
-   （改为 `snapshotEvents()` / `ownEvents()` / `eventAt()`）。守卫抛 `TypeError` 后被插件
-   自身的 `try/catch` 吞掉 → 所有新会话都不再有注入，日志里毫无痕迹。
-2. **重复投递**：同一文本既在 system 段、又作为历史 user 消息，每次请求发两遍（token 翻倍）。
-3. **快照漂移**：改词后段即时生效，而历史里那条消息仍是旧文本 → 恢复的会话同时看到两套矛盾指令。
-4. **重复注入**：去重表是模块级内存数组，插件热重载（新模块实例）或 DSH 重启即清空，
-   未落盘的注入不写日志 → 曾出现同一会话注入 2~3 份。
+排序值越小越靠前。参考顺序：
 
-结论：**system prompt 段是更强、更省、更稳的通道**，所以只保留它。
+- Harness Identity：`-100`
+- Agent Preset / Persona：`0`
+- 插件全局层：`10`
+- 插件工作区层：`20`
+- DSH 工具说明：通常为 `100–199`
 
----
+System 和 User Context 属于两个独立序列，排序值只在各自序列内比较。
 
-## 版本与分支
+## 设置与安全
 
-本仓库是 `dsh-session-prompt` 的发布仓库：
+设置保存在 DSH 数据目录下的 `dsh-session-prompt.json`，只在本地读写。当前格式版本为 2：
 
-| 分支 | 内容 |
-|---|---|
-| **`main`** | **最新版（当前 V0.2，system prompt 单通道）** |
-| `v0.2` | V0.2 的干净单提交历史（要与上游对比时用它） |
-| `v0.1` | 旧版 V0.1（system prompt 段 + 上下文消息双通道），仅作保留 |
-
-安装请用 `main`（默认分支）或固定到 `v0.2`；历史版本的打包产物见 Releases。
-
----
-
-## 环境要求
-
-- DSH（DeepSeek Harness）本体，`@deepseek-ai/dsh-system-prompt` / `@deepseek-ai/dsh-tools`
-  在 `>=0.0.1-rc <2` 区间内（已在 `0.1.5-rc.1` 上验证）；
-- 想用**输入栏按钮**，运行 profile 需要 web 形态（有 `webServer` 服务）。
-  非 web profile（headless / CLI）下插件仍会装配段与工具，只是没有 UI 与 HTTP API。
-
----
-
-## 安装
-
-### 方式 A：从本仓库目录直接装（最简单）
-
-```bash
-git clone https://github.com/WinRNGS/dsh-session-prompt-standalone.git dsh-session-prompt
-dsh plugin --profile web add "$(pwd)/dsh-session-prompt"
-
-# 想固定在某条版本分支上：
-# git clone -b v0.2 https://github.com/WinRNGS/dsh-session-prompt-standalone.git dsh-session-prompt
-```
-
-`dsh plugin --profile <name> add <spec>` 是 pnpm 的转发器；装完会自动把声明了
-`dsh.bundle` 的依赖追加进该 profile 的 `dsh.profile.bundles` 层栈。
-
-### 方式 B：用打包好的 tgz（Release 附件）
-
-```bash
-dsh plugin --profile web add ./dsh-external-dsh-session-prompt-0.2.0.tgz
-```
-
-### 方式 C：作为 git 依赖写进 profile
-
-```jsonc
-// ~/.dsh/profiles/<profile>/package.json
+```json
 {
-  "dependencies": {
-    "@dsh-external/dsh-session-prompt": "github:WinRNGS/dsh-session-prompt-standalone#v0.2"
+  "version": 2,
+  "global": {
+    "enabled": true,
+    "prompt": "全局规则",
+    "role": "system",
+    "order": 10
+  },
+  "workspaces": {
+    "normalized-workspace-key": {
+      "path": "workspace-path",
+      "enabled": true,
+      "prompt": "项目规则",
+      "role": "user-context",
+      "order": 20
+    }
   }
 }
 ```
 
-改完执行 `dsh plugin --profile <profile> install`（或直接 `pnpm install`）。
-本仓库已提交构建产物 `lib/`，安装端无需任何构建步骤。
+- 单段正文上限 256 KiB，请求体上限 1 MiB，设置文件上限 4 MiB；
+- 最多保存 512 个工作区层；
+- 写入使用临时文件与原子替换，并用跨 profile 文件锁保护；
+- API 使用 revision 与 `If-Match` 检测陈旧草稿，冲突返回 409；
+- 写入接口只接受同源 JSON 请求；
+- 外部文件变化会触发热重载；未知的新格式版本或超大文件进入只读保护；
+- 单个无效层会保留可恢复正文但自动禁用，不影响其他有效层；
+- 整份 JSON 损坏时，下次保存前会生成带时间标记的备份；
+- DSH 会解释完整的双花括号模板变量。插件定位为纯文本注入，因此拒绝这种结构，避免未知变量导致后续模型请求失败。
 
-### 方式 D：开发态运行时注入（需要 dsh-super-injector）
+提示词只能影响模型行为，不能保证任何模型百分之百遵循。
 
-```text
-dev_inject_plugin <本仓库的绝对路径>
-```
+## 可选初始值
 
-装好后**重启 DSH**（或在支持热重载的环境里热重载插件）即可生效。
-
-### 卸载
-
-```bash
-dsh plugin --profile web remove @dsh-external/dsh-session-prompt
-```
-
-（会同时从 `bundles` 层栈移除；`~/.dsh/dsh-session-prompt.json` 是用户数据，不会被删。）
-
----
-
-## 使用
-
-1. **输入栏按钮**：在输入框右侧功能区、**模型选择器左侧**点 **System Prompt** →
-   弹窗显示当前文本 → 编辑 → 保存。保存后所有会话下一轮请求即生效。
-2. **让模型改**：直接说 `把 system prompt 设置为：……`（模型会调用 `dsh_session_prompt_set`）。
-3. **手改文件**：编辑 `~/.dsh/dsh-session-prompt.json` 的 `prompt` 字段，重启或热重载插件后生效。
-
-写入的文本会以 system prompt 段 `session-prompt:persistent` 的形式出现在每次请求中；
-它**不会**出现在聊天记录里——这是设计行为，不是故障。
-
----
-
-## 配置（可选）
-
-在 `cordis.patch.yml`（本插件包内，或 profile 的 patch 层）里给装配层一个初始值：
+在 bundle 配置中设置初始全局提示词：
 
 ```yaml
 - insert:
     - id: dsh-session-prompt
       name: '@dsh-external/dsh-session-prompt'
       config:
-        prompt: '你的初始提示词'
+        prompt: '你的初始全局提示词'
 ```
 
-注意：一旦用户在 UI/工具里保存过，`~/.dsh/dsh-session-prompt.json` 会优先于这里的 `config.prompt`。
+设置文件优先于该初始值。“恢复默认”会回到此值；未配置时使用插件内置文本。
 
----
+## 更新与卸载
 
-## 目录结构
+更新时重新执行对应的安装命令，然后重启 DSH。设置文件独立于插件包，正常更新不会清除已有提示词。
 
-```
-.
-├── cordis.patch.yml          # bundle 层：把插件 insert 进 cordis loader
-├── package.json              # dsh.bundle / dsh.client 声明、exports、peerDependencies
-├── lib/                      # 构建产物（已入库，装完即用）
-│   ├── index.js              #   宿主侧：system prompt 段 + 工具 + 可选 HTTP API
-│   ├── client.js             #   浏览器侧：输入栏 System Prompt 按钮与模态框
-│   └── types/                #   类型声明
-├── src/
-│   ├── index.ts              # 宿主侧源码（含内置默认提示词 DEFAULT_PROMPT）
-│   └── client/index.ts       # 客户端源码
-├── scripts/
-│   ├── build.sh              # 用 DSH checkout 的 tsc 编译宿主侧
-│   └── build-client.mjs      # 用 DSH checkout 的 tsdown 打包客户端
-├── tsconfig.json
-├── tsdown.config.ts
-├── CHANGELOG.md
-└── LICENSE
-```
+卸载请使用 DSH 自身的插件管理命令。卸载插件不会自动删除设置文件，便于重新安装后恢复；如需彻底清理，应由用户自行确认后删除该设置文件。
 
----
+## 开发与验证
 
-## 从源码构建
-
-需要一份 DSH 源码 checkout（含 `packages/` 与 `node_modules/.bin/tsc`）：
+只有修改 TypeScript 源码时才需要一份已经安装依赖的 DSH checkout：
 
 ```bash
-DSH_CHECKOUT=/path/to/dsh-checkout bash scripts/build.sh          # 宿主侧 → lib/
-DSH_CHECKOUT=/path/to/dsh-checkout node scripts/build-client.mjs  # 客户端 → lib/client.js
-npm pack                                                          # 产出 tgz
+DSH_CHECKOUT=<path-to-dsh-checkout> npm run typecheck
+DSH_CHECKOUT=<path-to-dsh-checkout> npm run build
+npm run test:smoke
+npm pack
 ```
 
-构建脚本会用 junction/symlink 把 checkout 里的 `cordis`、`@deepseek-ai/dsh-tools`、
-`@deepseek-ai/dsh-system-prompt` 等链接到插件的 `node_modules/`（该目录不入库）。
+PowerShell 可先设置同名环境变量，再执行这些命令。构建脚本会临时链接 DSH workspace 依赖；这些依赖不会进入仓库或发布包。
 
----
+主要目录：
 
-## 故障排查
-
-| 现象 | 原因 / 处理 |
-|---|---|
-| 输入栏看不到 **System Prompt** 按钮 | ① profile 是 web 形态吗；② `lib/client.js` 是否存在；③ 刷新页面（客户端插件支持 HMR 时自动重载）。 |
-| 点按钮提示 `读取失败: HTTP 403` / `保存失败: HTTP 403` | 请求被宿主网关拒绝。**DSH Desktop 2.0.9 起 webserver 被桌面层加了一层门禁**：只有 Electron 窗口（渲染进程会自动附带 `x-dsh-desktop-renderer` 头）的请求放行；用**外部浏览器**打开同一个 `http://127.0.0.1:<port>` 时，所有路由（不只本插件）都会 403。请在桌面窗口内使用。 |
-| 提示词改了但没生效 | 段在每轮请求重新组装，**下一条消息**才生效；若改的是 `cordis.patch.yml` 而非 UI，需要重启或热重载插件。 |
-| system prompt 里看不到这段 | 确认该 profile 已装配本插件（`dsh.profile.bundles` 里有 `@dsh-external/dsh-session-prompt`），并确认当次请求里有段名 `session-prompt:persistent`。 |
-| 提示词太长怎么办 | 段是每次请求都发的静态文本（对前缀缓存友好），token 成本与长度成正比，建议控制在几百字内。 |
-
----
-
-## 隐私与数据
-
-- 只读写本地文件 `~/.dsh/dsh-session-prompt.json`（可用 `DSH_HOME` 改位置）；
-- 不发起任何网络请求，不上报任何内容；
-- 暴露在端口上的 `/dsh-session-prompt/api` 只返回/接收这段文本，且受宿主既有网关保护。
-
----
-
-## 开发与贡献
-
-- 宿主侧：`src/index.ts`（`inject = ['systemPrompt', 'tools']`，`webServer` 走内层 `ctx.inject`）；
-- 客户端：`src/client/index.ts`（注册 `conversation.input.right` 插槽条目）；
-- 改完请执行 `bash scripts/build.sh` + `node scripts/build-client.mjs`，并把 `lib/` 一起提交（本仓库以"装完即用"为准）。
+```text
+src/index.ts          宿主端：设置、注入、工具、API、预览
+src/default-prompt.ts 内置默认提示词
+src/client/index.ts   输入栏设置界面与预览
+lib/                  已编译、可直接安装的发布产物
+scripts/              构建与冒烟测试
+cordis.patch.yml      DSH bundle 装配层
+```
 
 ## License
 
-MIT，见 [LICENSE](LICENSE)。
-
----
-
-## English summary
-
-`@dsh-external/dsh-session-prompt` injects a user-defined instruction block into **every**
-DSH session as a **static system-prompt section** (`session-prompt:persistent`, order 10).
-The text survives context compaction, never replaces the official persona, never appears as a
-fake chat message, and applies to all sessions on the next request. Edit it from the
-**System Prompt** button left of the model selector in the input bar, via the
-`dsh_session_prompt_set` tool, or by editing `~/.dsh/dsh-session-prompt.json`.
-Version 0.2.0 removed the legacy context-injection channel (it relied on `session.events`,
-which DSH `0.1.5-rc.1` dropped; it also double-billed tokens and drifted from the live setting).
+MIT

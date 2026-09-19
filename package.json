@@ -1,7 +1,7 @@
 {
   "name": "@dsh-external/dsh-session-prompt",
-  "version": "0.2.0",
-  "description": "以 system prompt 固定段（session-prompt:persistent）向每个 DSH 会话注入可自定义指令，并提供输入栏 UI 编辑入口",
+  "version": "0.4.0",
+  "description": "为 DSH 提供全局/工作区持久提示词层，支持 System、User Context、排序与真实装配预览",
   "private": false,
   "type": "module",
   "main": "./lib/index.js",
@@ -17,10 +17,14 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "src",
     "lib",
     "cordis.patch.yml",
     "scripts/build.sh",
+    "scripts/build-host.mjs",
     "scripts/build-client.mjs",
+    "scripts/smoke-test.mjs",
+    "tsconfig.json",
     "tsdown.config.ts",
     "README.md",
     "CHANGELOG.md",
@@ -57,8 +61,10 @@
     "typescript": "^5.9.0"
   },
   "scripts": {
-    "build": "bash scripts/build.sh",
+    "build": "node scripts/build-host.mjs && node scripts/build-client.mjs",
+    "build:host": "node scripts/build-host.mjs",
     "build:client": "node scripts/build-client.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "test:smoke": "node scripts/smoke-test.mjs",
+    "typecheck": "node scripts/build-host.mjs --noEmit"
   }
 }
